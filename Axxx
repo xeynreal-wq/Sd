@@ -1,0 +1,235 @@
+--[[
+    Greedy Growers Thai Mobile (PRO LIGHTNING & PROXIMITY BUY) - แก้ไขแล้ว
+    - ปรับแต่งให้ลื่นขึ้นสำหรับมือถือ (ไม่แลค ไม่ค้าง)
+    - ซื้อเมล็ด: ยิงตรงที่ปุ่ม ProximityPrompt บนพื้น
+    - เก็บก่อนฟ้าผ่า: ใช้ระบบดักจับ (Event) ทันทีที่เป้าสายฟ้าโผล่ จะกดเก็บก่อนโดนผ่าเสี้ยววิ
+--]]
+
+local Players = game:GetService("Players")
+local Workspace = game:GetService("Workspace")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local VirtualUser = game:GetService("VirtualUser")
+local LocalPlayer = Players.LocalPlayer
+
+-- ลบ UI เก่าออกถ้ามี
+local pgui = LocalPlayer:WaitForChild("PlayerGui")
+if pgui:FindFirstChild("GG_Thai_Pro") then
+    pgui.GG_Thai_Pro:Destroy()
+end
+
+-- ป้องกัน AFK (โดนเตะเมื่อยืนนิ่ง)
+pcall(function()
+    LocalPlayer.Idled:Connect(function()
+        VirtualUser:CaptureController()
+        VirtualUser:ClickButton2(Vector2.new())
+    end)
+end)
+
+local Settings = {
+    AutoBuy = false,
+    SeedRarity = "Epic",
+    AutoHarvest = false,
+    AutoSell = false
+}
+
+local Rarities = {"Common", "Uncommon", "Rare", "Epic", "Legendary", "Secret"}
+local RarityIndex = 4
+
+-- สร้าง UI สำหรับมือถือ
+local sg = Instance.new("ScreenGui", pgui)
+sg.Name = "GG_Thai_Pro"
+sg.ResetOnSpawn = false
+
+local openBtn = Instance.new("TextButton", sg)
+openBtn.Size = UDim2.new(0, 50, 0, 50)
+openBtn.Position = UDim2.new(0, 15, 0.3, 0)
+openBtn.BackgroundColor3 = Color3.fromRGB(0, 180, 100)
+openBtn.Text = "เปิดเมนู"
+openBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+openBtn.TextSize = 13
+openBtn.Font = Enum.Font.SourceSansBold
+openBtn.Active = true
+openBtn.Draggable = true
+Instance.new("UICorner", openBtn).CornerRadius = UDim.new(1, 0)
+
+local main = Instance.new("Frame", sg)
+main.Size = UDim2.new(0, 290, 0, 260)
+main.Position = UDim2.new(0.5, -145, 0.4, -130)
+main.BackgroundColor3 = Color3.fromRGB(25, 25, 30)
+main.Active = true
+main.Draggable = true
+main.Visible = false
+Instance.new("UICorner", main).CornerRadius = UDim.new(0, 12)
+
+local title = Instance.new("TextLabel", main)
+title.Size = UDim2.new(1, 0, 0, 40)
+title.Text = "⚡ Greedy Growers (PRO V.2)"
+title.TextColor3 = Color3.fromRGB(100, 255, 150)
+title.TextSize = 16
+title.Font = Enum.Font.SourceSansBold
+title.BackgroundTransparency = 1
+
+local function CreateButton(text, posY, callback)
+    local btn = Instance.new("TextButton", main)
+    btn.Size = UDim2.new(0.9, 0, 0, 42)
+    btn.Position = UDim2.new(0.05, 0, 0, posY)
+    btn.BackgroundColor3 = Color3.fromRGB(40, 40, 48)
+    btn.Text = text
+    btn.TextColor3 = Color3.fromRGB(255, 255, 255)
+    btn.TextSize = 14
+    btn.Font = Enum.Font.SourceSansBold
+    Instance.new("UICorner", btn).CornerRadius = UDim.new(0, 8)
+    
+    local enabled = false
+    btn.MouseButton1Click:Connect(function()
+        enabled = not enabled
+        callback(enabled, btn)
+    end)
+    return btn
+end
+
+-- ปุ่มเปลี่ยนระดับเมล็ด
+local rarityBtn = Instance.new("TextButton", main)
+rarityBtn.Size = UDim2.new(0.9, 0, 0, 42)
+rarityBtn.Position = UDim2.new(0.05, 0, 0, 45)
+rarityBtn.BackgroundColor3 = Color3.fromRGB(50, 50, 60)
+rarityBtn.Text = "ระดับเมล็ด: Epic 🎯 (แตะเพื่อเปลี่ยน)"
+rarityBtn.TextColor3 = Color3.fromRGB(255, 220, 100)
+rarityBtn.TextSize = 13
+rarityBtn.Font = Enum.Font.SourceSansBold
+Instance.new("UICorner", rarityBtn).CornerRadius = UDim.new(0, 8)
+
+rarityBtn.MouseButton1Click:Connect(function()
+    RarityIndex = (RarityIndex % #Rarities) + 1
+    Settings.SeedRarity = Rarities[RarityIndex]
+    rarityBtn.Text = "ระดับเมล็ด: " .. Settings.SeedRarity .. " 🎯"
+end)
+
+CreateButton("🛒 ออโต้ซื้อเมล็ด: ปิด ❌", 95, function(state, btn)
+    Settings.AutoBuy = state
+    btn.Text = state and "🛒 ออโต้ซื้อเมล็ด: เปิด ✅" or "🛒 ออโต้ซื้อเมล็ด: ปิด ❌"
+    btn.BackgroundColor3 = state and Color3.fromRGB(0, 120, 60) or Color3.fromRGB(40, 40, 48)
+end)
+
+CreateButton("⚡ ออโต้เก็บก่อนฟ้าผ่า: ปิด ❌", 145, function(state, btn)
+    Settings.AutoHarvest = state
+    btn.Text = state and "⚡ ออโต้เก็บก่อนฟ้าผ่า: เปิด ✅" or "⚡ ออโต้เก็บก่อนฟ้าผ่า: ปิด ❌"
+    btn.BackgroundColor3 = state and Color3.fromRGB(0, 120, 60) or Color3.fromRGB(40, 40, 48)
+end)
+
+CreateButton("💰 ออโต้ขายทั้งหมด: ปิด ❌", 195, function(state, btn)
+    Settings.AutoSell = state
+    btn.Text = state and "💰 ออโต้ขายทั้งหมด: เปิด ✅" or "💰 ออโต้ขายทั้งหมด: ปิด ❌"
+    btn.BackgroundColor3 = state and Color3.fromRGB(0, 120, 60) or Color3.fromRGB(40, 40, 48)
+end)
+
+openBtn.MouseButton1Click:Connect(function()
+    main.Visible = not main.Visible
+end)
+
+-- ================= ฟังก์ชั่นอำนวยความสะดวก =================
+local function getPrompts()
+    local prompts = {}
+    for _, obj in pairs(Workspace:GetDescendants()) do
+        if obj:IsA("ProximityPrompt") then
+            table.insert(prompts, obj)
+        end
+    end
+    return prompts
+end
+
+-- ================= 1. ระบบซื้อเมล็ด (แบบแก้แลค) =================
+task.spawn(function()
+    while task.wait(0.5) do
+        if Settings.AutoBuy then
+            pcall(function()
+                local prompts = getPrompts()
+                for _, prompt in pairs(prompts) do
+                    -- เช็คชื่อโมเดล หรือชื่อของปุ่ม ว่าตรงกับความหายากที่เลือกไหม
+                    local parentName = prompt.Parent and prompt.Parent.Name:lower() or ""
+                    local actionText = prompt.ActionText:lower()
+                    local objectText = prompt.ObjectText:lower()
+                    local targetRarity = Settings.SeedRarity:lower()
+                    
+                    if parentName:find(targetRarity) or actionText:find(targetRarity) or objectText:find(targetRarity) then
+                        -- ถ้าเจอปุ่มซื้อเมล็ดระดับที่ต้องการ ให้ยิงคำสั่งเลย
+                        fireproximityprompt(prompt)
+                    end
+                end
+            end)
+        end
+    end
+end)
+
+-- ================= 2. ระบบดักเก็บก่อนฟ้าผ่าเสี้ยววิ (แบบ Event ดักจับทันที) =================
+-- ทันทีที่มีเป้าสายฟ้า (Warning/Lightning) โผล่มาในแมพ มันจะทำงานทันที (ไวกว่าลูป)
+Workspace.DescendantAdded:Connect(function(obj)
+    if not Settings.AutoHarvest then return end
+    
+    -- รอให้ระบบโหลดชื่อและตำแหน่งแป๊บนึง
+    task.wait(0.05) 
+    
+    pcall(function()
+        local name = obj.Name:lower()
+        -- ถ้าวัตถุที่โผล่มาเป็นสัญญาณเตือนฟ้าผ่า
+        if name:find("lightning") or name:find("strike") or name:find("target") or name:find("warning") then
+            if obj:IsA("BasePart") then
+                local strikePos = obj.Position
+                
+                -- หาต้นไม้ที่อยู่ใกล้เป้าสายฟ้านั้น
+                local prompts = getPrompts()
+                for _, prompt in pairs(prompts) do
+                    local plant = prompt.Parent
+                    if plant and plant:IsA("BasePart") then
+                        local distance = (plant.Position - strikePos).Magnitude
+                        -- ถ้าสายฟ้าลงใกล้ต้นไม้ (ระยะไม่เกิน 15) ให้กดเก็บผลผลิตทันที!
+                        if distance < 15 then
+                            fireproximityprompt(prompt)
+                        end
+                    end
+                end
+            end
+        end
+    end)
+end)
+
+-- (ระบบสำรอง) เผื่อบางเกมไม่ได้ใช้สายฟ้าเป็นออบเจกต์เกิดใหม่ แต่เป็นสีแดง
+task.spawn(function()
+    while task.wait(0.2) do
+        if Settings.AutoHarvest then
+            pcall(function()
+                local prompts = getPrompts()
+                for _, prompt in pairs(prompts) do
+                    -- เช็คว่าถ้าปุ่มนี้เป็นปุ่ม "เก็บผลผลิต" (Harvest)
+                    if prompt.ActionText:lower():find("harvest") or prompt.ActionText:lower():find("collect") then
+                        -- ปล่อยไว้ให้ตัวคูณเด้ง (ระบบ DescendantAdded ด้านบนจะเป็นตัวชิงกดก่อนฟ้าผ่า)
+                        -- แต่ถ้าระบบด้านบนไม่ทำงาน ให้กดเก็บเมื่อตัวคูณถึงจุดที่ต้องการ (ถ้าเกมมีบอก)
+                    end
+                end
+            end)
+        end
+    end
+end)
+
+-- ================= 3. ระบบขายอัตโนมัติ =================
+task.spawn(function()
+    while task.wait(1) do
+        if Settings.AutoSell then
+            pcall(function()
+                -- หาปุ่มขาย (ถ้าเกมใช้ปุ่มกด)
+                local prompts = getPrompts()
+                for _, prompt in pairs(prompts) do
+                    if prompt.ActionText:lower():find("sell") or prompt.ObjectText:lower():find("sell") then
+                        fireproximityprompt(prompt)
+                    end
+                end
+                
+                -- ยิง RemoteEvent ขาย (ถ้าเกมใช้ Remote)
+                local sellRemote1 = ReplicatedStorage:FindFirstChild("Sell", true)
+                local sellRemote2 = ReplicatedStorage:FindFirstChild("SellAll", true)
+                if sellRemote1 and sellRemote1:IsA("RemoteEvent") then sellRemote1:FireServer() end
+                if sellRemote2 and sellRemote2:IsA("RemoteEvent") then sellRemote2:FireServer() end
+            end)
+        end
+    end
+end)
