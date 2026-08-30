@@ -1,0 +1,249 @@
+-- [[ PC Cinematic Pro (Smooth Camera + Speed Control) ]] --
+local CoreGui = game:GetService("CoreGui")
+local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
+local StarterGui = game:GetService("StarterGui")
+local UserInputService = game:GetService("UserInputService")
+local Player = Players.LocalPlayer
+local Camera = workspace.CurrentCamera
+
+-- ลบ UI เก่า
+pcall(function()
+    for _, v in pairs(CoreGui:GetChildren()) do
+        if v.Name == "CinematicPCPro" then v:Destroy() end
+    end
+end)
+
+-- ==========================================
+-- 1. สร้าง UI เมนูหลัก
+-- ==========================================
+local ScreenGui = Instance.new("ScreenGui")
+ScreenGui.Name = "CinematicPCPro"
+pcall(function() ScreenGui.Parent = CoreGui end)
+if not ScreenGui.Parent then ScreenGui.Parent = Player:WaitForChild("PlayerGui") end
+
+local MainFrame = Instance.new("Frame", ScreenGui)
+MainFrame.BackgroundColor3 = Color3.fromRGB(20, 20, 20)
+MainFrame.BackgroundTransparency = 0.15
+MainFrame.Position = UDim2.new(0.05, 0, 0.3, 0)
+MainFrame.Size = UDim2.new(0, 280, 0, 250)
+Instance.new("UICorner", MainFrame).CornerRadius = UDim.new(0, 8)
+
+-- ฟังก์ชั่นลาก UI
+local function MakeDraggable(obj)
+    local dragging, dragStart, startPos
+    obj.InputBegan:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1 then
+            dragging = true
+            dragStart = input.Position
+            startPos = obj.Position
+        end
+    end)
+    obj.InputEnded:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1 then dragging = false end
+    end)
+    UserInputService.InputChanged:Connect(function(input)
+        if dragging and input.UserInputType == Enum.UserInputType.MouseMovement then
+            local delta = input.Position - dragStart
+            obj.Position = UDim2.new(startPos.X.Scale, startPos.X.Offset + delta.X, startPos.Y.Scale, startPos.Y.Offset + delta.Y)
+        end
+    end)
+end
+MakeDraggable(MainFrame)
+
+local Title = Instance.new("TextLabel", MainFrame)
+Title.BackgroundTransparency = 1
+Title.Size = UDim2.new(1, 0, 0, 40)
+Title.Font = Enum.Font.GothamBold
+Title.Text = "🎬 PC Cinematic Mode"
+Title.TextColor3 = Color3.fromRGB(255, 255, 255)
+Title.TextSize = 16
+
+local function CreateBtn(text, yPos, color)
+    local btn = Instance.new("TextButton", MainFrame)
+    btn.BackgroundColor3 = color
+    btn.Position = UDim2.new(0.05, 0, 0, yPos)
+    btn.Size = UDim2.new(0.9, 0, 0, 35)
+    btn.Font = Enum.Font.GothamSemibold
+    btn.Text = text
+    btn.TextColor3 = Color3.fromRGB(255, 255, 255)
+    btn.TextSize = 14
+    Instance.new("UICorner", btn).CornerRadius = UDim.new(0, 6)
+    return btn
+end
+
+local BtnFreecam = CreateBtn("📷 เปิดกล้องอิสระ [Hotkey: P]", 45, Color3.fromRGB(50, 50, 50))
+local BtnHideUI = CreateBtn("👁️ ซ่อน UI เกม [Hotkey: L]", 85, Color3.fromRGB(50, 50, 50))
+local BtnHideMenu = CreateBtn("👻 ซ่อนเมนูนี้ [Hotkey: K]", 125, Color3.fromRGB(50, 50, 50))
+
+-- กล่องแสดงความเร็วกล้อง
+local SpeedLabel = Instance.new("TextLabel", MainFrame)
+SpeedLabel.BackgroundTransparency = 1
+SpeedLabel.Position = UDim2.new(0.05, 0, 0, 170)
+SpeedLabel.Size = UDim2.new(0.9, 0, 0, 30)
+SpeedLabel.Font = Enum.Font.Gotham
+SpeedLabel.Text = "ความเร็วกล้อง: 1.0 (เลื่อนลูกกลิ้งเมาส์)"
+SpeedLabel.TextColor3 = Color3.fromRGB(200, 200, 200)
+SpeedLabel.TextSize = 13
+
+-- ปุ่มเรียกคืน
+local OpenBtn = Instance.new("TextButton", ScreenGui)
+OpenBtn.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
+OpenBtn.Position = UDim2.new(0, 20, 0, 20)
+OpenBtn.Size = UDim2.new(0, 40, 0, 40)
+OpenBtn.Text = "🎬"
+OpenBtn.TextSize = 20
+OpenBtn.Visible = false
+Instance.new("UICorner", OpenBtn).CornerRadius = UDim.new(1, 0)
+MakeDraggable(OpenBtn)
+
+-- ==========================================
+-- 2. ระบบควบคุมและการจำค่า
+-- ==========================================
+local FreecamOn = false
+local UIHidden = false
+local SavedUiStates = {}
+local MenuHidden = false
+
+local CamSpeed = 1.0
+local CamPos = Vector3.new()
+local CamRot = Vector2.new()
+local MoveKeys = {W = false, A = false, S = false, D = false, Q = false, E = false}
+local CurrentMoveVector = Vector3.new() -- สำหรับทำความสมูท (Lerping)
+local RightClicking = false
+
+-- ฟังก์ชั่นสลับกล้อง
+local function ToggleFreecam()
+    FreecamOn = not FreecamOn
+    local hrp = Player.Character and Player.Character:FindFirstChild("HumanoidRootPart")
+    
+    if FreecamOn then
+        BtnFreecam.Text = "❌ ปิดกล้องอิสระ [P]"
+        BtnFreecam.BackgroundColor3 = Color3.fromRGB(180, 60, 60)
+        
+        CamPos = Camera.CFrame.Position
+        local x, y, z = Camera.CFrame:ToEulerAnglesYXZ()
+        CamRot = Vector2.new(x, y)
+        CurrentMoveVector = Vector3.new()
+        
+        Camera.CameraType = Enum.CameraType.Scriptable
+        if hrp then hrp.Anchored = true end -- ล็อกตัว
+    else
+        BtnFreecam.Text = "📷 เปิดกล้องอิสระ [P]"
+        BtnFreecam.BackgroundColor3 = Color3.fromRGB(50, 50, 50)
+        Camera.CameraType = Enum.CameraType.Custom
+        Camera.CameraSubject = Player.Character and Player.Character:FindFirstChild("Humanoid")
+        if hrp then hrp.Anchored = false end -- ปลดล็อกตัว
+    end
+end
+
+-- ฟังก์ชั่นสลับ UI (จำค่าเก่า)
+local function ToggleUI()
+    UIHidden = not UIHidden
+    
+    if UIHidden then
+        BtnHideUI.Text = "👀 แสดง UI เกม [L]"
+        BtnHideUI.BackgroundColor3 = Color3.fromRGB(60, 120, 180)
+        pcall(function() StarterGui:SetCoreGuiEnabled(Enum.CoreGuiType.All, false) end)
+        
+        table.clear(SavedUiStates)
+        if Player:FindFirstChild("PlayerGui") then
+            for _, gui in pairs(Player.PlayerGui:GetChildren()) do
+                if gui:IsA("ScreenGui") and gui.Name ~= "CinematicPCPro" then
+                    SavedUiStates[gui] = gui.Enabled
+                    gui.Enabled = false
+                end
+            end
+        end
+    else
+        BtnHideUI.Text = "👁️ ซ่อน UI เกม [L]"
+        BtnHideUI.BackgroundColor3 = Color3.fromRGB(50, 50, 50)
+        pcall(function() StarterGui:SetCoreGuiEnabled(Enum.CoreGuiType.All, true) end)
+        
+        for gui, state in pairs(SavedUiStates) do
+            if gui and gui.Parent then gui.Enabled = state end
+        end
+    end
+end
+
+-- ฟังก์ชั่นซ่อนเมนูสคริปต์
+local function ToggleMenu()
+    MenuHidden = not MenuHidden
+    MainFrame.Visible = not MenuHidden
+    OpenBtn.Visible = MenuHidden
+end
+
+BtnFreecam.MouseButton1Click:Connect(ToggleFreecam)
+BtnHideUI.MouseButton1Click:Connect(ToggleUI)
+BtnHideMenu.MouseButton1Click:Connect(ToggleMenu)
+OpenBtn.MouseButton1Click:Connect(ToggleMenu)
+
+-- ==========================================
+-- 3. ระบบ PC Input (คีย์บอร์ด & เมาส์)
+-- ==========================================
+UserInputService.InputBegan:Connect(function(input, processed)
+    if processed and input.UserInputType ~= Enum.UserInputType.MouseButton2 then return end
+    
+    -- Hotkeys
+    if input.KeyCode == Enum.KeyCode.P then ToggleFreecam() end
+    if input.KeyCode == Enum.KeyCode.L then ToggleUI() end
+    if input.KeyCode == Enum.KeyCode.K then ToggleMenu() end
+    
+    -- เดินกล้อง
+    if input.KeyCode == Enum.KeyCode.W then MoveKeys.W = true end
+    if input.KeyCode == Enum.KeyCode.A then MoveKeys.A = true end
+    if input.KeyCode == Enum.KeyCode.S then MoveKeys.S = true end
+    if input.KeyCode == Enum.KeyCode.D then MoveKeys.D = true end
+    if input.KeyCode == Enum.KeyCode.Q then MoveKeys.Q = true end -- ลง
+    if input.KeyCode == Enum.KeyCode.E then MoveKeys.E = true end -- ขึ้น
+    
+    -- คลิกขวาค้างเพื่อหัน
+    if input.UserInputType == Enum.UserInputType.MouseButton2 then RightClicking = true end
+end)
+
+UserInputService.InputEnded:Connect(function(input)
+    if input.KeyCode == Enum.KeyCode.W then MoveKeys.W = false end
+    if input.KeyCode == Enum.KeyCode.A then MoveKeys.A = false end
+    if input.KeyCode == Enum.KeyCode.S then MoveKeys.S = false end
+    if input.KeyCode == Enum.KeyCode.D then MoveKeys.D = false end
+    if input.KeyCode == Enum.KeyCode.Q then MoveKeys.Q = false end
+    if input.KeyCode == Enum.KeyCode.E then MoveKeys.E = false end
+    if input.UserInputType == Enum.UserInputType.MouseButton2 then RightClicking = false end
+end)
+
+-- หันกล้อง & ปรับความเร็ว
+UserInputService.InputChanged:Connect(function(input)
+    if not FreecamOn then return end
+    
+    -- หันกล้องเมื่อกดคลิกขวาค้าง
+    if input.UserInputType == Enum.UserInputType.MouseMovement and RightClicking then
+        CamRot = CamRot + Vector2.new(-input.Delta.Y, -input.Delta.X) * 0.003
+    end
+    
+    -- เลื่อนลูกกลิ้งปรับความเร็ว
+    if input.UserInputType == Enum.UserInputType.MouseWheel then
+        CamSpeed = math.clamp(CamSpeed + (input.Position.Z * 0.2), 0.1, 10.0)
+        SpeedLabel.Text = string.format("ความเร็วกล้อง: %.1f (เลื่อนลูกกลิ้งเมาส์)", CamSpeed)
+    end
+end)
+
+-- ลูปอัปเดตกล้องแบบ Smooth (Lerp)
+RunService.RenderStepped:Connect(function()
+    if FreecamOn then
+        -- คำนวณเป้าหมายที่ต้องการไป
+        local targetVec = Vector3.new(0, 0, 0)
+        if MoveKeys.W then targetVec = targetVec + Vector3.new(0, 0, -1) end
+        if MoveKeys.S then targetVec = targetVec + Vector3.new(0, 0, 1) end
+        if MoveKeys.A then targetVec = targetVec + Vector3.new(-1, 0, 0) end
+        if MoveKeys.D then targetVec = targetVec + Vector3.new(1, 0, 0) end
+        if MoveKeys.Q then targetVec = targetVec + Vector3.new(0, -1, 0) end
+        if MoveKeys.E then targetVec = targetVec + Vector3.new(0, 1, 0) end
+        
+        -- ทำให้การขยับกล้อง "สมูท" (Momentum) 0.1 คือความลื่น ยิ่งน้อยยิ่งลื่น
+        CurrentMoveVector = CurrentMoveVector:Lerp(targetVec, 0.1)
+        
+        local rotation = CFrame.Angles(0, CamRot.Y, 0) * CFrame.Angles(CamRot.X, 0, 0)
+        CamPos = CamPos + rotation:VectorToWorldSpace(CurrentMoveVector * CamSpeed)
+        Camera.CFrame = CFrame.new(CamPos) * rotation
+    end
+end)
