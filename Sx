@@ -1,0 +1,118 @@
+-- [[ Cinematic Camera & Sunset Shader For Blox Fruits ]] --
+local uis = game:GetService("UserInputService")
+local rs = game:GetService("RunService")
+local lgt = game:GetService("Lighting")
+local cam = workspace.CurrentCamera
+local plr = game.Players.LocalPlayer
+
+local fcOn, uiHidden, shaderOn = false, false, false
+local speed = 2
+local holdingRMB = false
+local yaw, pitch = 0, 0
+local keys = {W=false, A=false, S=false, D=false, Space=false, LCtrl=false}
+
+-- [1] ระบบแสง Shader (พระอาทิตย์ตก)
+local effects = {}
+local function ToggleShader()
+    shaderOn = not shaderOn
+    if shaderOn then
+        lgt.ClockTime = 17.4 -- เวลาเย็น
+        lgt.EnvironmentDiffuseScale = 0.5
+        
+        local cc = Instance.new("ColorCorrectionEffect")
+        cc.Contrast = 0.2
+        cc.Saturation = 0.6 -- เพิ่มสีสด
+        cc.TintColor = Color3.fromRGB(255, 215, 175) -- แสงสีทอง
+        cc.Parent = lgt
+        table.insert(effects, cc)
+
+        local bloom = Instance.new("BloomEffect")
+        bloom.Intensity = 0.7
+        bloom.Size = 20
+        bloom.Parent = lgt
+        table.insert(effects, bloom)
+
+        local rays = Instance.new("SunRaysEffect")
+        rays.Intensity = 0.25
+        rays.Spread = 0.7
+        rays.Parent = lgt
+        table.insert(effects, rays)
+    else
+        lgt.ClockTime = 14 -- กลับเวลาปกติ
+        for _, v in pairs(effects) do v:Destroy() end
+        effects = {}
+    end
+end
+
+-- [2] ระบบควบคุมปุ่ม
+uis.InputBegan:Connect(function(input, gp)
+    if gp then return end
+    if input.KeyCode == Enum.KeyCode.P then -- เปิด/ปิด กล้องอิสระ
+        fcOn = not fcOn
+        if fcOn then
+            cam.CameraType = Enum.CameraType.Scriptable
+            local x, y, z = cam.CFrame:ToEulerAnglesYXZ()
+            yaw, pitch = y, x
+        else
+            cam.CameraType = Enum.CameraType.Custom
+            cam.CameraSubject = plr.Character:WaitForChild("Humanoid")
+        end
+    elseif input.KeyCode == Enum.KeyCode.L then -- ซ่อน UI
+        uiHidden = not uiHidden
+        game.StarterGui:SetCoreGuiEnabled(Enum.CoreGuiType.All, not uiHidden)
+        if plr.PlayerGui:FindFirstChild("Main") then plr.PlayerGui.Main.Enabled = not uiHidden end
+    elseif input.KeyCode == Enum.KeyCode.K then -- เปิด/ปิด แสง Shader
+        ToggleShader()
+    end
+    
+    -- ปุ่มเดิน
+    if input.KeyCode == Enum.KeyCode.W then keys.W = true end
+    if input.KeyCode == Enum.KeyCode.S then keys.S = true end
+    if input.KeyCode == Enum.KeyCode.A then keys.A = true end
+    if input.KeyCode == Enum.KeyCode.D then keys.D = true end
+    if input.KeyCode == Enum.KeyCode.Space then keys.Space = true end -- ขึ้น
+    if input.KeyCode == Enum.KeyCode.LeftControl then keys.LCtrl = true end -- ลง
+    
+    if input.UserInputType == Enum.UserInputType.MouseButton2 then holdingRMB = true end
+end)
+
+uis.InputEnded:Connect(function(input)
+    if input.KeyCode == Enum.KeyCode.W then keys.W = false end
+    if input.KeyCode == Enum.KeyCode.S then keys.S = false end
+    if input.KeyCode == Enum.KeyCode.A then keys.A = false end
+    if input.KeyCode == Enum.KeyCode.D then keys.D = false end
+    if input.KeyCode == Enum.KeyCode.Space then keys.Space = false end
+    if input.KeyCode == Enum.KeyCode.LeftControl then keys.LCtrl = false end
+    if input.UserInputType == Enum.UserInputType.MouseButton2 then holdingRMB = false end
+end)
+
+-- [3] ระบบหันกล้อง (คลิกขวาลาก) & ซูมความเร็ว
+uis.InputChanged:Connect(function(input)
+    if fcOn and holdingRMB and input.UserInputType == Enum.UserInputType.MouseMovement then
+        yaw = yaw - math.rad(input.Delta.X * 0.3)
+        pitch = math.clamp(pitch - math.rad(input.Delta.Y * 0.3), -math.pi/2, math.pi/2)
+    end
+    if fcOn and input.UserInputType == Enum.UserInputType.MouseWheel then
+        speed = math.clamp(speed + (input.Position.Z * 0.5), 0.1, 10)
+    end
+end)
+
+-- [4] ระบบเคลื่อนที่กล้อง (สมูท 100%)
+rs.RenderStepped:Connect(function()
+    if fcOn then
+        local move = Vector3.new(0, 0, 0)
+        if keys.W then move = move + Vector3.new(0, 0, -1) end
+        if keys.S then move = move + Vector3.new(0, 0, 1) end
+        if keys.A then move = move + Vector3.new(-1, 0, 0) end
+        if keys.D then move = move + Vector3.new(1, 0, 0) end
+        if keys.Space then move = move + Vector3.new(0, 1, 0) end
+        if keys.LCtrl then move = move + Vector3.new(0, -1, 0) end
+        
+        local rotation = CFrame.fromEulerAnglesYXZ(pitch, yaw, 0)
+        local worldMove = rotation:VectorToWorldSpace(move)
+        
+        cam.CFrame = CFrame.new(cam.CFrame.Position + (worldMove * speed)) * rotation
+    end
+end)
+
+game.StarterGui:SetCore("SendNotification", {Title="พร้อมถ่ายคลิป!", Text="P: กล้อง | L: ปิด UI | K: แสง Shader", Duration=5})
