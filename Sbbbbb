@@ -1,0 +1,288 @@
+-- [[ Cinematic Camera & Shader Hub (PC Complete Version) ]] --
+local CoreGui = game:GetService("CoreGui")
+local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
+local UserInputService = game:GetService("UserInputService")
+local Lighting = game:GetService("Lighting")
+local StarterGui = game:GetService("StarterGui")
+
+local Player = Players.LocalPlayer
+local Camera = workspace.CurrentCamera
+
+-- ล้าง UI เก่าถ้าเคยกดรันซ้ำ
+pcall(function()
+    for _, v in pairs(CoreGui:GetChildren()) do
+        if v.Name == "CinematicHub" then v:Destroy() end
+    end
+end)
+
+-- ==========================================
+-- สร้างเมนู UI
+-- ==========================================
+local ScreenGui = Instance.new("ScreenGui")
+ScreenGui.Name = "CinematicHub"
+pcall(function() ScreenGui.Parent = CoreGui end)
+if not ScreenGui.Parent then ScreenGui.Parent = Player:WaitForChild("PlayerGui") end
+
+-- ปุ่มเรียกคืนเมนู (วงกลม)
+local OpenBtn = Instance.new("TextButton", ScreenGui)
+OpenBtn.Size = UDim2.new(0, 40, 0, 40)
+OpenBtn.Position = UDim2.new(0, 20, 0, 20)
+OpenBtn.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
+OpenBtn.Text = "🎬"
+OpenBtn.TextSize = 20
+OpenBtn.Visible = false
+Instance.new("UICorner", OpenBtn).CornerRadius = UDim.new(1, 0)
+
+local MainFrame = Instance.new("Frame", ScreenGui)
+MainFrame.Size = UDim2.new(0, 280, 0, 320)
+MainFrame.Position = UDim2.new(0.05, 0, 0.3, 0)
+MainFrame.BackgroundColor3 = Color3.fromRGB(25, 25, 25)
+MainFrame.BackgroundTransparency = 0.1
+Instance.new("UICorner", MainFrame).CornerRadius = UDim.new(0, 8)
+
+-- ระบบลาก UI
+local function MakeDraggable(obj)
+    local dragging, dragStart, startPos
+    obj.InputBegan:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1 then
+            dragging = true dragStart = input.Position startPos = obj.Position
+        end
+    end)
+    obj.InputEnded:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1 then dragging = false end
+    end)
+    UserInputService.InputChanged:Connect(function(input)
+        if dragging and input.UserInputType == Enum.UserInputType.MouseMovement then
+            local delta = input.Position - dragStart
+            obj.Position = UDim2.new(startPos.X.Scale, startPos.X.Offset + delta.X, startPos.Y.Scale, startPos.Y.Offset + delta.Y)
+        end
+    end)
+end
+MakeDraggable(MainFrame)
+MakeDraggable(OpenBtn)
+
+local Title = Instance.new("TextLabel", MainFrame)
+Title.Size = UDim2.new(1, 0, 0, 40)
+Title.BackgroundTransparency = 1
+Title.Text = "🎬 Cinematic Hub (ลากได้)"
+Title.TextColor3 = Color3.fromRGB(255, 255, 255)
+Title.Font = Enum.Font.GothamBold
+Title.TextSize = 16
+
+local function CreateBtn(text, y, color)
+    local btn = Instance.new("TextButton", MainFrame)
+    btn.Size = UDim2.new(0.9, 0, 0, 35)
+    btn.Position = UDim2.new(0.05, 0, 0, y)
+    btn.BackgroundColor3 = color
+    btn.Text = text
+    btn.TextColor3 = Color3.fromRGB(255, 255, 255)
+    btn.Font = Enum.Font.GothamSemibold
+    btn.TextSize = 14
+    Instance.new("UICorner", btn).CornerRadius = UDim.new(0, 6)
+    return btn
+end
+
+local BtnFreecam = CreateBtn("📷 เปิดกล้องอิสระ", 45, Color3.fromRGB(50, 50, 50))
+local BtnShader = CreateBtn("🌅 เปิดแสง Shader ยามเย็น", 85, Color3.fromRGB(50, 50, 50))
+local BtnUI = CreateBtn("👁️ ซ่อน UI เกม", 125, Color3.fromRGB(50, 50, 50))
+local BtnHideMenu = CreateBtn("👻 ซ่อนเมนูนี้ (กด 🎬 เพื่อคืน)", 165, Color3.fromRGB(150, 50, 50))
+
+-- สร้าง Slider ปรับความเร็ว
+local SpeedLabel = Instance.new("TextLabel", MainFrame)
+SpeedLabel.Size = UDim2.new(0.9, 0, 0, 20)
+SpeedLabel.Position = UDim2.new(0.05, 0, 0, 215)
+SpeedLabel.BackgroundTransparency = 1
+SpeedLabel.Text = "ความเร็วกล้อง: 1.0 (ลากปรับ)"
+SpeedLabel.TextColor3 = Color3.fromRGB(200, 200, 200)
+SpeedLabel.Font = Enum.Font.Gotham
+SpeedLabel.TextSize = 12
+
+local SliderBG = Instance.new("Frame", MainFrame)
+SliderBG.Size = UDim2.new(0.9, 0, 0, 10)
+SliderBG.Position = UDim2.new(0.05, 0, 0, 240)
+SliderBG.BackgroundColor3 = Color3.fromRGB(10, 10, 10)
+Instance.new("UICorner", SliderBG).CornerRadius = UDim.new(1, 0)
+
+local SliderFill = Instance.new("Frame", SliderBG)
+SliderFill.Size = UDim2.new(0.2, 0, 1, 0) -- เริ่มต้นที่ 20% (ความเร็ว 1)
+SliderFill.BackgroundColor3 = Color3.fromRGB(80, 150, 200)
+Instance.new("UICorner", SliderFill).CornerRadius = UDim.new(1, 0)
+
+local SliderBtn = Instance.new("TextButton", SliderBG)
+SliderBtn.Size = UDim2.new(1, 0, 1, 0)
+SliderBtn.BackgroundTransparency = 1
+SliderBtn.Text = ""
+
+-- ==========================================
+-- ตัวแปรระบบ
+-- ==========================================
+local FreecamOn, UIHidden, ShaderOn = false, false, false
+local CamSpeed = 1.0
+local Pitch, Yaw = 0, 0
+local MoveKeys = {W=false, A=false, S=false, D=false, Q=false, E=false}
+local RightClicking = false
+local Effects = {}
+local SavedUI = {}
+
+-- ==========================================
+-- ระบบ Slider ความเร็ว
+-- ==========================================
+local draggingSlider = false
+SliderBtn.InputBegan:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.MouseButton1 then draggingSlider = true end
+end)
+UserInputService.InputEnded:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.MouseButton1 then draggingSlider = false end
+end)
+UserInputService.InputChanged:Connect(function(input)
+    if draggingSlider and input.UserInputType == Enum.UserInputType.MouseMovement then
+        local pct = math.clamp((input.Position.X - SliderBG.AbsolutePosition.X) / SliderBG.AbsoluteSize.X, 0.05, 1)
+        SliderFill.Size = UDim2.new(pct, 0, 1, 0)
+        CamSpeed = pct * 5 -- ความเร็วตั้งแต่ 0.25 ถึง 5.0
+        SpeedLabel.Text = string.format("ความเร็วกล้อง: %.1f", CamSpeed)
+    end
+end)
+
+-- ==========================================
+-- ระบบ Shader
+-- ==========================================
+BtnShader.MouseButton1Click:Connect(function()
+    ShaderOn = not ShaderOn
+    if ShaderOn then
+        BtnShader.Text = "🌅 ปิดแสง Shader"
+        BtnShader.BackgroundColor3 = Color3.fromRGB(200, 120, 50)
+        Lighting.ClockTime = 17.5
+        Lighting.EnvironmentDiffuseScale = 0.5
+        
+        local cc = Instance.new("ColorCorrectionEffect")
+        cc.Contrast = 0.15 cc.Saturation = 0.5 cc.TintColor = Color3.fromRGB(255, 220, 180)
+        cc.Parent = Lighting table.insert(Effects, cc)
+        
+        local bloom = Instance.new("BloomEffect")
+        bloom.Intensity = 0.8 bloom.Size = 24
+        bloom.Parent = Lighting table.insert(Effects, bloom)
+        
+        local sun = Instance.new("SunRaysEffect")
+        sun.Intensity = 0.3 sun.Spread = 0.8
+        sun.Parent = Lighting table.insert(Effects, sun)
+    else
+        BtnShader.Text = "🌅 เปิดแสง Shader ยามเย็น"
+        BtnShader.BackgroundColor3 = Color3.fromRGB(50, 50, 50)
+        Lighting.ClockTime = 14
+        for _, v in pairs(Effects) do v:Destroy() end
+        Effects = {}
+    end
+end)
+
+-- ==========================================
+-- ระบบ ซ่อน UI
+-- ==========================================
+BtnUI.MouseButton1Click:Connect(function()
+    UIHidden = not UIHidden
+    if UIHidden then
+        BtnUI.Text = "👀 แสดง UI เกม"
+        BtnUI.BackgroundColor3 = Color3.fromRGB(60, 120, 180)
+        pcall(function() StarterGui:SetCoreGuiEnabled(Enum.CoreGuiType.All, false) end)
+        
+        table.clear(SavedUI)
+        if Player:FindFirstChild("PlayerGui") then
+            for _, gui in pairs(Player.PlayerGui:GetChildren()) do
+                if gui:IsA("ScreenGui") and gui.Name ~= "CinematicHub" then
+                    SavedUI[gui] = gui.Enabled
+                    gui.Enabled = false
+                end
+            end
+        end
+    else
+        BtnUI.Text = "👁️ ซ่อน UI เกม"
+        BtnUI.BackgroundColor3 = Color3.fromRGB(50, 50, 50)
+        pcall(function() StarterGui:SetCoreGuiEnabled(Enum.CoreGuiType.All, true) end)
+        for gui, state in pairs(SavedUI) do
+            if gui and gui.Parent then gui.Enabled = state end
+        end
+    end
+end)
+
+-- ==========================================
+-- ระบบ ซ่อนเมนู
+-- ==========================================
+BtnHideMenu.MouseButton1Click:Connect(function()
+    MainFrame.Visible = false
+    OpenBtn.Visible = true
+end)
+OpenBtn.MouseButton1Click:Connect(function()
+    MainFrame.Visible = true
+    OpenBtn.Visible = false
+end)
+
+-- ==========================================
+-- ระบบ กล้องอิสระ (แก้บั๊กสมบูรณ์ 100%)
+-- ==========================================
+BtnFreecam.MouseButton1Click:Connect(function()
+    FreecamOn = not FreecamOn
+    local hrp = Player.Character and Player.Character:FindFirstChild("HumanoidRootPart")
+    
+    if FreecamOn then
+        BtnFreecam.Text = "❌ ปิดกล้องอิสระ"
+        BtnFreecam.BackgroundColor3 = Color3.fromRGB(180, 60, 60)
+        
+        Camera.CameraType = Enum.CameraType.Scriptable
+        local x, y, z = Camera.CFrame:ToEulerAnglesYXZ()
+        Pitch, Yaw = x, y -- จดจำมุมปัจจุบัน
+        
+        if hrp then hrp.Anchored = true end -- ล็อกตัวละครไม่ให้ตก
+    else
+        BtnFreecam.Text = "📷 เปิดกล้องอิสระ"
+        BtnFreecam.BackgroundColor3 = Color3.fromRGB(50, 50, 50)
+        Camera.CameraType = Enum.CameraType.Custom
+        Camera.CameraSubject = Player.Character and Player.Character:FindFirstChild("Humanoid")
+        if hrp then hrp.Anchored = false end
+    end
+end)
+
+-- รับปุ่มคีย์บอร์ด
+UserInputService.InputBegan:Connect(function(input, gp)
+    if gp then return end
+    if input.KeyCode == Enum.KeyCode.W then MoveKeys.W = true end
+    if input.KeyCode == Enum.KeyCode.S then MoveKeys.S = true end
+    if input.KeyCode == Enum.KeyCode.A then MoveKeys.A = true end
+    if input.KeyCode == Enum.KeyCode.D then MoveKeys.D = true end
+    if input.KeyCode == Enum.KeyCode.E then MoveKeys.E = true end -- ขึ้น (E)
+    if input.KeyCode == Enum.KeyCode.Q then MoveKeys.Q = true end -- ลง (Q)
+    if input.UserInputType == Enum.UserInputType.MouseButton2 then RightClicking = true end
+end)
+
+UserInputService.InputEnded:Connect(function(input)
+    if input.KeyCode == Enum.KeyCode.W then MoveKeys.W = false end
+    if input.KeyCode == Enum.KeyCode.S then MoveKeys.S = false end
+    if input.KeyCode == Enum.KeyCode.A then MoveKeys.A = false end
+    if input.KeyCode == Enum.KeyCode.D then MoveKeys.D = false end
+    if input.KeyCode == Enum.KeyCode.E then MoveKeys.E = false end
+    if input.KeyCode == Enum.KeyCode.Q then MoveKeys.Q = false end
+    if input.UserInputType == Enum.UserInputType.MouseButton2 then RightClicking = false end
+end)
+
+-- หันมุมกล้อง (เมาส์ขวา)
+UserInputService.InputChanged:Connect(function(input)
+    if FreecamOn and RightClicking and input.UserInputType == Enum.UserInputType.MouseMovement then
+        Yaw = Yaw - math.rad(input.Delta.X * 0.4)
+        Pitch = math.clamp(Pitch - math.rad(input.Delta.Y * 0.4), -math.pi/2 + 0.01, math.pi/2 - 0.01)
+    end
+end)
+
+-- ลูปการเคลื่อนที่กล้อง (แก้บั๊กจมดิน)
+RunService.RenderStepped:Connect(function()
+    if FreecamOn then
+        -- คำนวณแกนเคลื่อนที่
+        local moveVec = Vector3.new(
+            (MoveKeys.D and 1 or 0) - (MoveKeys.A and 1 or 0), -- ซ้ายขวา (X)
+            (MoveKeys.E and 1 or 0) - (MoveKeys.Q and 1 or 0), -- ขึ้นลง (Y)
+            (MoveKeys.S and 1 or 0) - (MoveKeys.W and 1 or 0)  -- หน้าหลัง (Z)
+        )
+        
+        -- อัพเดทพิกัดโดยอิงจากมุมกล้องปัจจุบัน CFrame.new เพื่อไม่ให้กล้องจมดินเวลาเล็งลง
+        Camera.CFrame = CFrame.new(Camera.CFrame.Position) * CFrame.fromEulerAnglesYXZ(Pitch, Yaw, 0)
+        Camera.CFrame = Camera.CFrame * CFrame.new(moveVec * CamSpeed)
+    end
+end)
