@@ -1,0 +1,82 @@
+local UserInputService = game:GetService("UserInputService")
+local Lighting = game:GetService("Lighting")
+
+-- กำหนดคีย์ลัดสำหรับเปิด/ปิด (ปุ่ม K)
+local TOGGLE_KEY = Enum.KeyCode.K
+local isEnabled = false
+
+-- บันทึกค่าเดิมของเกมไว้ ป้องกันบั๊กแสงเพี้ยนตอนปิด
+local original = {
+    Technology = Lighting.Technology,
+    Ambient = Lighting.Ambient,
+    OutdoorAmbient = Lighting.OutdoorAmbient,
+    Brightness = Lighting.Brightness,
+    GlobalShadows = Lighting.GlobalShadows,
+    ClockTime = Lighting.ClockTime,
+    ExposureCompensation = Lighting.ExposureCompensation
+}
+
+-- สร้าง Shader Effects (ใช้ทรัพยากรเครื่องน้อยมาก ไม่กระตุก)
+local bloom = Instance.new("BloomEffect")
+bloom.Name = "PC_Shader_Bloom"
+bloom.Intensity = 1.35       -- แสงสว่างฟุ้งตามแบบในรูป
+bloom.Size = 30
+bloom.Threshold = 0.8
+bloom.Enabled = false
+bloom.Parent = Lighting
+
+local colorCorrection = Instance.new("ColorCorrectionEffect")
+colorCorrection.Name = "PC_Shader_CC"
+colorCorrection.Contrast = 0.4    -- เพิ่มความลึกของเงาให้คมเข้ม
+colorCorrection.Brightness = 0.05  -- ดันความสว่างเล็กน้อยเพื่อไม่ให้มืดตานานเกินไป
+colorCorrection.Saturation = 0.05
+colorCorrection.Enabled = false
+colorCorrection.Parent = Lighting
+
+local depthOfField = Instance.new("DepthOfFieldEffect")
+depthOfField.Name = "PC_Shader_DoF"
+depthOfField.FarIntensity = 0.2
+depthOfField.FocusDistance = 15
+depthOfField.InFocusRadius = 25
+depthOfField.NearIntensity = 0.1
+depthOfField.Enabled = false
+depthOfField.Parent = Lighting
+
+-- ฟังก์ชันสลับการทำงาน
+local function toggleShaders()
+    isEnabled = not isEnabled
+    
+    if isEnabled then
+        -- ตั้งค่า Lighting เป็นแบบ Shadow/Dark Vibe
+        pcall(function() Lighting.Technology = Enum.Technology.Future end) -- ใช้เทคโนโลยีเงา Future ถ้าตัวรันรองรับ
+        Lighting.GlobalShadows = true
+        Lighting.Ambient = Color3.fromRGB(35, 35, 35)       -- โทนเงาเข้ม
+        Lighting.OutdoorAmbient = Color3.fromRGB(45, 45, 55)
+        Lighting.Brightness = 3.2                          -- จุดสว่างสะท้อนชัดเจน
+        Lighting.ExposureCompensation = 0.15
+        
+        bloom.Enabled = true
+        colorCorrection.Enabled = true
+        depthOfField.Enabled = true
+    else
+        -- คืนค่าเดิมของเกมทันที
+        Lighting.Ambient = original.Ambient
+        Lighting.OutdoorAmbient = original.OutdoorAmbient
+        Lighting.Brightness = original.Brightness
+        Lighting.GlobalShadows = original.GlobalShadows
+        Lighting.ExposureCompensation = original.ExposureCompensation
+        
+        bloom.Enabled = false
+        colorCorrection.Enabled = false
+        depthOfField.Enabled = false
+    end
+end
+
+-- ตรวจจับการกดปุ่ม K บน PC
+UserInputService.InputBegan:Connect(function(input, gameProcessed)
+    if gameProcessed then return end -- ไม่ทำงานเวลาพิมพ์ช่อง Chat
+    
+    if input.KeyCode == TOGGLE_KEY then
+        toggleShaders()
+    end
+end)
