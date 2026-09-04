@@ -1,0 +1,69 @@
+local UserInputService = game:GetService("UserInputService")
+local Lighting = game:GetService("Lighting")
+
+-- กำหนดคีย์ลัดสำหรับเปิด/ปิด (ปุ่ม K)
+local TOGGLE_KEY = Enum.KeyCode.K
+local isEnabled = false
+
+-- บันทึกค่าเดิมของแมพไว้ เพื่อให้เปิด/ปิดได้เนียน ไม่บั๊ก
+local original = {
+    Technology = Lighting.Technology,
+    Ambient = Lighting.Ambient,
+    OutdoorAmbient = Lighting.OutdoorAmbient,
+    Brightness = Lighting.Brightness,
+    GlobalShadows = Lighting.GlobalShadows,
+    ExposureCompensation = Lighting.ExposureCompensation
+}
+
+-- สร้าง Effects ปรับแต่งแสง (ลดแสงจ้าลง ไม่แสบตา)
+local bloom = Instance.new("BloomEffect")
+bloom.Name = "AntiGlare_Bloom"
+bloom.Intensity = 0.35        -- ลดความฟุ้งลงเหลือ 0.35 (แก้อาการแสงขาวแสบตา)
+bloom.Size = 12              -- ลดรัศมีการกระจายแสง
+bloom.Threshold = 1.25       -- ให้ฟุ้งเฉพาะจุดที่สว่างสุดๆ จริงๆ เท่านั้น
+bloom.Enabled = false
+bloom.Parent = Lighting
+
+local colorCorrection = Instance.new("ColorCorrectionEffect")
+colorCorrection.Name = "AntiGlare_CC"
+colorCorrection.Contrast = 0.3      -- เพิ่มเงาให้คมลึกกำลังดี
+colorCorrection.Brightness = -0.05   -- ดรอปความสว่างรวมลงเล็กน้อยกันภาพจ้า
+colorCorrection.Saturation = 0.05
+colorCorrection.Enabled = false
+colorCorrection.Parent = Lighting
+
+-- ฟังก์ชันสลับเปิด/ปิด
+local function toggleShaders()
+    isEnabled = not isEnabled
+    
+    if isEnabled then
+        -- ปรับแต่งแสงโทนดาร์ก นุ่มตา เงาลึก
+        Lighting.GlobalShadows = true
+        Lighting.Ambient = Color3.fromRGB(30, 30, 30)       -- เงาโทนมืด
+        Lighting.OutdoorAmbient = Color3.fromRGB(40, 40, 50)
+        Lighting.Brightness = 1.2                         -- ลดความสว่างของฉากลงเพื่อไม่ให้สะท้อนแสบตา
+        Lighting.ExposureCompensation = -0.1              -- คุมไม่ให้แสงโอเวอร์เกินไป
+        
+        bloom.Enabled = true
+        colorCorrection.Enabled = true
+    else
+        -- คืนค่าเดิมของแมพ
+        Lighting.Ambient = original.Ambient
+        Lighting.OutdoorAmbient = original.OutdoorAmbient
+        Lighting.Brightness = original.Brightness
+        Lighting.GlobalShadows = original.GlobalShadows
+        Lighting.ExposureCompensation = original.ExposureCompensation
+        
+        bloom.Enabled = false
+        colorCorrection.Enabled = false
+    end
+end
+
+-- ตรวจจับการกดปุ่ม K
+UserInputService.InputBegan:Connect(function(input, gameProcessed)
+    if gameProcessed then return end
+    
+    if input.KeyCode == TOGGLE_KEY then
+        toggleShaders()
+    end
+end)
