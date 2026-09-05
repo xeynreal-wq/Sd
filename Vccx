@@ -1,0 +1,73 @@
+-- Blox Fruits: Simple No Fog & Smooth Matte Map PC GUI
+local ScreenGui = Instance.new("ScreenGui")
+local MainFrame = Instance.new("Frame")
+local Title = Instance.new("TextLabel")
+local ToggleBtn = Instance.new("TextButton")
+local UICorner = Instance.new("UICorner")
+
+ScreenGui.Parent = game:GetService("CoreGui")
+ScreenGui.Name = "BloxMapOptimizer"
+
+MainFrame.Name = "MainFrame"
+MainFrame.Parent = ScreenGui
+MainFrame.BackgroundColor3 = Color3.fromRGB(25, 25, 25)
+MainFrame.Position = UDim2.new(0.05, 0, 0.4, 0)
+MainFrame.Size = UDim2.new(0, 200, 0, 100)
+MainFrame.Active = true
+MainFrame.Draggable = true
+
+Title.Parent = MainFrame
+Title.Size = UDim2.new(1, 0, 0, 30)
+Title.Text = "Map Optimizer (BF)"
+Title.TextColor3 = Color3.fromRGB(255, 255, 255)
+Title.TextSize = 14
+Title.Font = Enum.Font.SourceSansBold
+
+ToggleBtn.Parent = MainFrame
+ToggleBtn.Position = UDim2.new(0.1, 0, 0.4, 0)
+ToggleBtn.Size = UDim2.new(0.8, 0, 0.4, 0)
+ToggleBtn.Text = "ลบหมอก + ทำแมต"
+ToggleBtn.BackgroundColor3 = Color3.fromRGB(0, 170, 255)
+ToggleBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+ToggleBtn.TextSize = 14
+ToggleBtn.Font = Enum.Font.SourceSans
+
+local BtnCorner = Instance.new("UICorner")
+BtnCorner.Parent = ToggleBtn
+
+ToggleBtn.MouseButton1Click:Connect(function()
+    -- 1. ลบหมอกและบรรยากาศใน Lighting
+    local Lighting = game:GetService("Lighting")
+    Lighting.FogEnd = 9e9
+    Lighting.FogStart = 9e9
+    Lighting.GlobalShadows = false
+    
+    for _, v in pairs(Lighting:GetChildren()) do
+        if v:IsA("Atmosphere") or v:IsA("PostEffect") or v:IsA("BloomEffect") or v:IsA("BlurEffect") or v:IsA("SunRaysEffect") then
+            v:Destroy()
+        end
+    end
+
+    -- 2. ลบ Texture / Decal และปรับสิ่งก่อสร้างเป็น SmoothPlastic
+    for _, v in pairs(workspace:GetDescendants()) do
+        if v:IsA("BasePart") and not v:IsA("MeshPart") then
+            v.Material = Enum.Material.SmoothPlastic
+            v.Reflectance = 0
+        elseif v:IsA("Decal") or v:IsA("Texture") then
+            v:Destroy()
+        end
+    end
+
+    -- 3. ตรวจสอบชิ้นส่วนที่โหลดมาใหม่ให้สแกนลบต่อเนื่อง
+    workspace.DescendantAdded:Connect(function(v)
+        if v:IsA("BasePart") and not v:IsA("MeshPart") then
+            v.Material = Enum.Material.SmoothPlastic
+            v.Reflectance = 0
+        elseif v:IsA("Decal") or v:IsA("Texture") then
+            v:Destroy()
+        end
+    end)
+
+    ToggleBtn.Text = "ทำงานแล้ว!"
+    ToggleBtn.BackgroundColor3 = Color3.fromRGB(40, 200, 40)
+end)
