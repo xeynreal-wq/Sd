@@ -1,0 +1,32 @@
+-- Evade PC: Settings FOV Changer (Auto Inject to Game Settings)
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local Players = game:GetService("Players")
+local LocalPlayer = Players.LocalPlayer
+local Camera = workspace.CurrentCamera
+
+-- Set Target FOV
+local TARGET_FOV = 120
+
+-- 1. Hook กล้องฝั่ง Client
+Camera.FieldOfView = TARGET_FOV
+
+-- 2. ดักจับการอัปเดต Render เพื่อไม่ให้ตัวเกมดึง FOV กลับเป็น 100
+game:GetService("RunService").RenderStepped:Connect(function()
+    if Camera.FieldOfView ~= TARGET_FOV then
+        Camera.FieldOfView = TARGET_FOV
+    end
+end)
+
+-- 3. แก้ไข UI Slider ให้แสดงผลเป็น 120 (Visual Fix ในหน้าเมนู)
+pcall(function()
+    local PlayerGui = LocalPlayer:WaitForChild("PlayerGui")
+    local SettingsMenu = PlayerGui:FindFirstChild("Settings") or PlayerGui:FindFirstChild("Menu")
+    
+    if SettingsMenu then
+        for _, v in pairs(SettingsMenu:GetDescendants()) do
+            if v:IsA("TextLabel") and (v.Text == "100" or string.find(v.Text, "Field of View")) then
+                v.Text = "120"
+            end
+        end
+    end
+end)
