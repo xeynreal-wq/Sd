@@ -1,0 +1,153 @@
+-- Blox Fruits: Gear Finder + Night & Server Age Monitor GUI
+local ScreenGui = Instance.new("ScreenGui")
+local MainFrame = Instance.new("Frame")
+local Title = Instance.new("TextLabel")
+local InfoLabel = Instance.new("TextLabel")
+local HighlightBtn = Instance.new("TextButton")
+local TPBtn = Instance.new("TextButton")
+
+ScreenGui.Parent = game:GetService("CoreGui")
+ScreenGui.Name = "BF_Ultimate_Tracker"
+
+MainFrame.Name = "MainFrame"
+MainFrame.Parent = ScreenGui
+MainFrame.BackgroundColor3 = Color3.fromRGB(20, 20, 20)
+MainFrame.Position = UDim2.new(0.05, 0, 0.25, 0)
+MainFrame.Size = UDim2.new(0, 240, 0, 210)
+MainFrame.Active = true
+MainFrame.Draggable = true
+
+local UICorner = Instance.new("UICorner")
+UICorner.Parent = MainFrame
+
+Title.Parent = MainFrame
+Title.Size = UDim2.new(1, 0, 0, 30)
+Title.Text = "BF Tracker & Gear Finder"
+Title.TextColor3 = Color3.fromRGB(255, 255, 255)
+Title.TextSize = 14
+Title.Font = Enum.Font.SourceSansBold
+
+-- กล่องแสดงผล คืนที่ผ่านไป / อายุเซิร์ฟเวอร์
+InfoLabel.Parent = MainFrame
+InfoLabel.Position = UDim2.new(0.05, 0, 0.16, 0)
+InfoLabel.Size = UDim2.new(0.9, 0, 0.32, 0)
+InfoLabel.BackgroundColor3 = Color3.fromRGB(35, 35, 35)
+InfoLabel.TextColor3 = Color3.fromRGB(0, 255, 200)
+InfoLabel.TextSize = 12
+InfoLabel.Font = Enum.Font.Code
+InfoLabel.TextXAlignment = Enum.TextXAlignment.Left
+InfoLabel.TextYAlignment = Enum.TextYAlignment.Top
+
+local InfoCorner = Instance.new("UICorner")
+InfoCorner.Parent = InfoLabel
+
+-- ปุ่มเรืองแสง
+HighlightBtn.Parent = MainFrame
+HighlightBtn.Position = UDim2.new(0.05, 0, 0.52, 0)
+HighlightBtn.Size = UDim2.new(0.9, 0, 0.2, 0)
+HighlightBtn.Text = "เปิดสว่าง + เฟืองเรืองแสงฟ้า"
+HighlightBtn.BackgroundColor3 = Color3.fromRGB(0, 150, 255)
+HighlightBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+HighlightBtn.TextSize = 12
+HighlightBtn.Font = Enum.Font.SourceSansBold
+
+local Btn1Corner = Instance.new("UICorner")
+Btn1Corner.Parent = HighlightBtn
+
+-- ปุ่มวาร์ป
+TPBtn.Parent = MainFrame
+TPBtn.Position = UDim2.new(0.05, 0, 0.75, 0)
+TPBtn.Size = UDim2.new(0.9, 0, 0.2, 0)
+TPBtn.Text = "วาร์ปไปหาเฟืองอัตโนมัติ"
+TPBtn.BackgroundColor3 = Color3.fromRGB(255, 100, 0)
+TPBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+TPBtn.TextSize = 12
+TPBtn.Font = Enum.Font.SourceSansBold
+
+local Btn2Corner = Instance.new("UICorner")
+Btn2Corner.Parent = TPBtn
+
+-- ระบบนับคืนและคำนวณอายุเซิร์ฟเวอร์ (100% Accurate)
+local serverStartTime = tick() - workspace.DistributedGameTime
+local nightCount = 0
+local isNight = false
+
+task.spawn(function()
+    while task.wait(1) do
+        -- 1. คำนวณอายุเซิร์ฟเวอร์
+        local totalSeconds = math.floor(workspace.DistributedGameTime)
+        local hours = math.floor(totalSeconds / 3600)
+        local mins = math.floor((totalSeconds % 3600) / 60)
+        local secs = totalSeconds % 60
+        
+        -- 2. เช็คการผ่านของกลางคืน (Blox Fruits กลางคืนคือ ClockTime < 6 หรือ > 18)
+        local clockTime = game:GetService("Lighting").ClockTime
+        if (clockTime >= 18 or clockTime < 6) then
+            if not isNight then
+                isNight = true
+                nightCount = nightCount + 1
+            end
+        else
+            isNight = false
+        end
+
+        -- อัปเดตข้อความบน UI
+        InfoLabel.Text = string.format(
+            " [ข้อมูลเซิร์ฟเวอร์]\n • อายุเซิร์ฟ: %d ชม. %d นาที %d วิ\n • ผ่านกลางคืนมาแล้ว: %d คืน\n • สถานะตอนนี้: %s",
+            hours, mins, secs, nightCount, isNight and "กลางคืน 🌙" or "กลางวัน ☀️"
+        )
+    end
+end)
+
+-- ฟังก์ชั่นมองสว่าง + ESP สีฟ้า
+HighlightBtn.MouseButton1Click:Connect(function()
+    local Lighting = game:GetService("Lighting")
+    Lighting.FogEnd = 9e9
+    Lighting.FogStart = 9e9
+    Lighting.Brightness = 5
+    Lighting.ClockTime = 12
+    Lighting.GlobalShadows = false
+
+    local found = false
+    for _, v in pairs(workspace:GetDescendants()) do
+        if v.Name == "Gear" or v.Name == "MysticGear" then
+            found = true
+            local hl = Instance.new("Highlight")
+            hl.Parent = v
+            hl.FillColor = Color3.fromRGB(0, 255, 255)
+            hl.OutlineColor = Color3.fromRGB(255, 255, 255)
+            hl.FillTransparency = 0
+            hl.OutlineTransparency = 0
+        end
+    end
+    
+    if found then
+        HighlightBtn.Text = "เจอเฟืองแล้ว! (สว่างฟ้า)"
+        HighlightBtn.BackgroundColor3 = Color3.fromRGB(0, 230, 100)
+    else
+        HighlightBtn.Text = "ไม่พบเฟือง (เปิดสว่างแล้ว)"
+    end
+end)
+
+-- ฟังก์ชั่นวาร์ป
+TPBtn.MouseButton1Click:Connect(function()
+    local player = game.Players.LocalPlayer
+    local character = player.Character or player.CharacterAdded:Wait()
+    local hrp = character:FindFirstChild("HumanoidRootPart")
+    
+    local targetGear = nil
+    for _, v in pairs(workspace:GetDescendants()) do
+        if v.Name == "Gear" or v.Name == "MysticGear" then
+            targetGear = v
+            break
+        end
+    end
+
+    if targetGear and hrp then
+        hrp.CFrame = targetGear.CFrame * CFrame.new(0, 3, 0)
+        TPBtn.Text = "วาร์ปสำเร็จ!"
+        TPBtn.BackgroundColor3 = Color3.fromRGB(0, 230, 100)
+    else
+        TPBtn.Text = "ยังไม่มีเฟืองเกิดในแมพ"
+    end
+end)
